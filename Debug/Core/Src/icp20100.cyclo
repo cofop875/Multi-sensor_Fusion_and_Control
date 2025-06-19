@@ -1,0 +1,6 @@
+../Core/Src/icp20100.c:25:31:icp20100_read_register	2
+../Core/Src/icp20100.c:39:31:icp20100_write_register	2
+../Core/Src/icp20100.c:54:31:icp20100_read_burst	2
+../Core/Src/icp20100.c:68:24:icp20100_init	15
+../Core/Src/icp20100.c:188:24:icp20100_get_pressure_temp	4
+../Core/Src/icp20100.c:231:6:ICP20100_Main	2

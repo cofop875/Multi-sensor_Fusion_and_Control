@@ -1,0 +1,11 @@
+../Core/Src/icm42688p.c:11:13:icm42688p_select	1
+../Core/Src/icm42688p.c:16:13:icm42688p_deselect	1
+../Core/Src/icm42688p.c:22:26:icm42688p_write_register	3
+../Core/Src/icm42688p.c:41:16:icm42688p_read_register	1
+../Core/Src/icm42688p.c:54:26:icm42688p_read_multiple_registers	1
+../Core/Src/icm42688p.c:67:26:icm42688p_set_bank	1
+../Core/Src/icm42688p.c:74:9:icm42688p_init	7
+../Core/Src/icm42688p.c:137:9:icm42688p_read_who_am_i	2
+../Core/Src/icm42688p.c:151:6:icm42688p_read_gyro_raw	3
+../Core/Src/icm42688p.c:178:6:icm42688p_read_accel_raw	3
+../Core/Src/icm42688p.c:209:6:ICM42688P_Main	1
