@@ -195,17 +195,27 @@ int main(void)
       /* Initialize ICM-42688-P sensor ----------------------------------------------------------*/
 
 	/* Initialize RM-3100 sensor ----------------------------------------------------------*/
-	printf("<RM-3100> System initialization...\r\n");
-	HAL_StatusTypeDef rm3100_status;
-	rm3100_status = SENSOR_OK;//RM3100_Init(&hi2c4);
-	if (rm3100_status == SENSOR_OK) {
-	  // 初始化成功信息已在 RM3100_Init 內部（或此處）打印
-	  printf("<RM-3100> initialization Successfully.\r\n");
-	} else {
-		printf("<RM-3100> Initialization Failed. Error Code: %d\r\n", rm3100_status);
-	  // 根據錯誤碼進行處理，例如進入錯誤狀態迴圈while(1){}
-	}
-	HAL_Delay(2000);
+      HAL_StatusTypeDef rm3100_status;
+     	      printf("<RM-3100> System initialization...\r\n");
+     	      // 使用 for 迴圈嘗試初始化，最多10次
+     	      for (attempt_count = 1; attempt_count <= MAX_INIT_ATTEMPTS; ++attempt_count) {
+     	    	 rm3100_status = SENSOR_OK; // 執行初始化
+     	          if (rm3100_status == SENSOR_OK) {
+     	              // 如果成功，就跳出迴圈，attempt_count歸零
+     	        	  attempt_count = 0;
+     	              break;
+     	          }
+     	          // 如果失敗，印出嘗試失敗的訊息
+     	          printf("<RM-3100> Initialization FAILED on attempt %d/%d. Retrying...\r\n", attempt_count, MAX_INIT_ATTEMPTS);
+     	          HAL_Delay(200); // 在下次嘗試前延遲一小段時間，讓感測器有時間重置
+     	      }
+     	      // 在迴圈結束後，根據最終的狀態來判斷並印出訊息
+     	      if (rm3100_status == SENSOR_OK) {
+     	          printf("<RM-3100> Initialization Successfully on attempt #%d\r\n", attempt_count);
+     	      } else {
+     	    	  printf("<RM-3100> Initialization FAILED Error Code: %d\r\n", rm3100_status);
+     	      }
+     	      HAL_Delay(2000);
 	/* Initialize RM-3100 sensor ----------------------------------------------------------*/
 
 	/* Initialize BMI-088 sensor ----------------------------------------------------------*/
@@ -230,17 +240,6 @@ int main(void)
 	    	  printf("<BMI-088> Initialization FAILED Error Code: %d\r\n", BMI088_status);
 	      }
 	      HAL_Delay(2000);
-	//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-		printf("<BMI-088> System initialization...\r\n");
-		HAL_StatusTypeDef BMI088_status;
-		BMI088_status = BMI088_Init();//BMI088_Init
-		if (BMI088_status == SENSOR_OK) {
-		  printf("<BMI-088> initialization Successfully.\r\n");
-		} else {
-			printf("<BMI-088> Initialization Failed. Error Code: %d\r\n", BMI088_status);
-		  // 根據錯誤碼進行處理，例如進入錯誤狀態迴圈while(1){}
-		}
-		HAL_Delay(2000);
 		/* Initialize BMI-088 sensor ----------------------------------------------------------*/
   /* USER CODE END 2 */
 

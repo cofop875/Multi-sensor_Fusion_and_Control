@@ -171,4 +171,6 @@ HAL_StatusTypeDef ICM20948_ReadAccelGyroRaw(int16_t* pAccel, int16_t* pGyro);
  */
 HAL_StatusTypeDef ICM20948_ReadMagRaw(int16_t* pMag);
 
+void ICM20948_Main();
+
 #endif /* INC_ICM20948_DRIVER_H_ */
