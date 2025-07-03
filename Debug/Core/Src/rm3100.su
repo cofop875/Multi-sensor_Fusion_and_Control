@@ -1,0 +1,6 @@
+../Core/Src/rm3100.c:14:20:RM3100_Init	16	static
+../Core/Src/rm3100.c:35:20:RM3100_ReadID	32	static
+../Core/Src/rm3100.c:42:20:RM3100_TriggerMeasurement	32	static
+../Core/Src/rm3100.c:51:20:RM3100_IsDataReady	40	static
+../Core/Src/rm3100.c:73:20:RM3100_ReadData	56	static
+../Core/Src/rm3100.c:119:7:RM3100_Main	64	static

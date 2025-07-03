@@ -30,7 +30,8 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h \
  ../Core/Inc/icm20948_driver.h ../Core/Inc/main.h ../Core/Inc/icp20100.h \
- ../Core/Inc/icm42688p.h
+ ../Core/Inc/icm42688p.h ../Core/Inc/sensor_error_handler.h \
+ ../Core/Inc/rm3100.h ../Core/Inc/BMI088.h
 ../Core/Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Core/Inc/stm32h7xx_hal_conf.h:
@@ -66,3 +67,6 @@ Core/Src/main.o: ../Core/Src/main.c ../Core/Inc/main.h \
 ../Core/Inc/main.h:
 ../Core/Inc/icp20100.h:
 ../Core/Inc/icm42688p.h:
+../Core/Inc/sensor_error_handler.h:
+../Core/Inc/rm3100.h:
+../Core/Inc/BMI088.h:

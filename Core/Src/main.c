@@ -25,6 +25,9 @@
 #include "icm20948_driver.h"
 #include "icp20100.h" // 引入 ICP20100 驅動程式庫
 #include "icm42688p.h" // 引入 ICM-42688-P 驅動程式頭文件
+#include "sensor_error_handler.h" //錯誤處理
+#include "rm3100.h"
+#include "BMI088.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -45,13 +48,22 @@
 /* Private variables ---------------------------------------------------------*/
 
 I2C_HandleTypeDef hi2c2;
+I2C_HandleTypeDef hi2c4;
 
 SPI_HandleTypeDef hspi1;
 SPI_HandleTypeDef hspi2;
+SPI_HandleTypeDef hspi3;
 
 /* USER CODE BEGIN PV */
+//ICM42688p
 int16_t accel_data[3]; // 用於儲存加速計 X, Y, Z 軸原始數據的陣列
 int16_t gyro_data[3];  // 用於儲存陀螺儀 X, Y, Z 軸原始數據的陣列
+// 感測器轉換後數據
+float ICM42688paccel_g[3];
+float ICM42688pgyro_dps[3];
+RM3100_Data magData;
+
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -61,6 +73,8 @@ static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
 static void MX_I2C2_Init(void);
 static void MX_SPI2_Init(void);
+static void MX_I2C4_Init(void);
+static void MX_SPI3_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -105,43 +119,129 @@ int main(void)
   MX_SPI1_Init();
   MX_I2C2_Init();
   MX_SPI2_Init();
+  MX_I2C4_Init();
+  MX_SPI3_Init();
   /* USER CODE BEGIN 2 */
-//  int WWE = 0;
-  	// Initialize ICM-20948
-  	  printf("ICM-20948 System initialization...\r\n");
-  	if (ICM20948_Init() == HAL_OK) {
-  	  printf("ICM-20948 Initialization Successfully\r\n");
-  	} else {
-  	  printf("ICM-20948 Initialization FAILED\r\n");
-  	  Error_Handler();
-  	}
-  	HAL_Delay(1000);
-  	// 初始化 ICP-20100 感測器
-  	printf("ICP-20100 System initialization...\r\n");
-	ICP20100_StatusTypeDef sensor_status = icp20100_init(&hi2c2);
-	if (sensor_status == ICP20100_OK) {
-	  printf("ICP-20100 Initialized Successfully.\r\n");
+#define MAX_INIT_ATTEMPTS 10 // 定義最大INIT嘗試次數
+  int attempt_count = 0;// INIT嘗試計數
+  /* Initialize ICM-20948 sensor ----------------------------------------------------------*/
+  HAL_StatusTypeDef ICM20948_status;
+  printf("<ICM-20948> System initialization...\r\n");
+  // 使用 for 迴圈嘗試初始化，最多10次
+  for (attempt_count = 1; attempt_count <= MAX_INIT_ATTEMPTS; ++attempt_count) {
+      ICM20948_status = ICM20948_Init(); // 執行初始化
+      if (ICM20948_status == SENSOR_OK) {
+          // 如果成功，就跳出迴圈，attempt_count歸零
+    	  attempt_count = 0;
+          break;
+      }
+      // 如果失敗，印出嘗試失敗的訊息
+      printf("<ICM-20948> Initialization FAILED on attempt %d/%d. Retrying...\r\n", attempt_count, MAX_INIT_ATTEMPTS);
+      HAL_Delay(200); // 在下次嘗試前延遲一小段時間，讓感測器有時間重置
+  }
+  // 在迴圈結束後，根據最終的狀態來判斷並印出訊息
+  if (ICM20948_status == SENSOR_OK) {
+      printf("<ICM-20948> Initialization Successfully on attempt #%d\r\n", attempt_count);
+  } else {
+	  printf("<ICM-20948> Initialization FAILED Error Code: %d\r\n", ICM20948_status);
+  }
+  HAL_Delay(2000);
+  	/* Initialize ICP-20100 sensor ----------------------------------------------------------*/
+  ICP20100_StatusTypeDef icp20100_status;
+   printf("<ICP-20100> System initialization...\r\n");
+   // 使用 for 迴圈嘗試初始化，最多10次
+   for (attempt_count = 1; attempt_count <= MAX_INIT_ATTEMPTS; ++attempt_count) {
+	   icp20100_status = icp20100_init(&hi2c2); // 執行初始化
+       if (icp20100_status == SENSOR_OK) {
+           // 如果成功，就跳出迴圈，attempt_count歸零
+     	  attempt_count = 0;
+           break;
+       }
+       // 如果失敗，印出嘗試失敗的訊息
+       printf("<ICP-20100> Initialization FAILED on attempt %d/%d. Retrying...\r\n", attempt_count, MAX_INIT_ATTEMPTS);
+       HAL_Delay(200); // 在下次嘗試前延遲一小段時間，讓感測器有時間重置
+   }
+   // 在迴圈結束後，根據最終的狀態來判斷並印出訊息
+   if (icp20100_status == SENSOR_OK) {
+       printf("<ICP-20100> Initialization Successfully on attempt #%d\r\n", attempt_count);
+   } else {
+ 	  printf("<ICP-20100> Initialization FAILED Error Code: %d\r\n", icp20100_status);
+   }
+   HAL_Delay(2000);
+   /* Initialize ICP-20100 sensor ----------------------------------------------------------*/
+
+   /* Initialize ICM-42688-P sensor ----------------------------------------------------------*/
+   	   HAL_StatusTypeDef icm42688p_status;
+      printf("<ICM-42688-P> System initialization...\r\n");
+      // 使用 for 迴圈嘗試初始化，最多10次
+      for (attempt_count = 1; attempt_count <= MAX_INIT_ATTEMPTS; ++attempt_count) {
+    	  icm42688p_status = icm42688p_init(&hspi2); // 執行初始化
+          if (icm42688p_status == SENSOR_OK) {
+              // 如果成功，就跳出迴圈，attempt_count歸零
+        	  attempt_count = 0;
+              break;
+          }
+          // 如果失敗，印出嘗試失敗的訊息
+          printf("<ICM-42688-P> Initialization FAILED on attempt %d/%d. Retrying...\r\n", attempt_count, MAX_INIT_ATTEMPTS);
+          HAL_Delay(200); // 在下次嘗試前延遲一小段時間，讓感測器有時間重置
+      }
+      // 在迴圈結束後，根據最終的狀態來判斷並印出訊息
+      if (icm42688p_status == SENSOR_OK) {
+          printf("<ICM-42688-P> Initialization Successfully on attempt #%d\r\n", attempt_count);
+      } else {
+    	  printf("<ICM-42688-P> Initialization FAILED Error Code: %d\r\n", icm42688p_status);
+      }
+      HAL_Delay(2000);
+      /* Initialize ICM-42688-P sensor ----------------------------------------------------------*/
+
+	/* Initialize RM-3100 sensor ----------------------------------------------------------*/
+	printf("<RM-3100> System initialization...\r\n");
+	HAL_StatusTypeDef rm3100_status;
+	rm3100_status = SENSOR_OK;//RM3100_Init(&hi2c4);
+	if (rm3100_status == SENSOR_OK) {
+	  // 初始化成功信息已在 RM3100_Init 內部（或此處）打印
+	  printf("<RM-3100> initialization Successfully.\r\n");
 	} else {
-	  printf("ICP-20100 Initialization Failed. Error Code: %d\r\n", sensor_status);
-	  // 根據錯誤碼進行處理，例如進入錯誤狀態迴圈
-	  while(1) {
-		  // 錯誤狀態
-	  }
+		printf("<RM-3100> Initialization Failed. Error Code: %d\r\n", rm3100_status);
+	  // 根據錯誤碼進行處理，例如進入錯誤狀態迴圈while(1){}
 	}
-	/* Initialize ICM-42688-P sensor */
-	  printf("ICM-42688-P System initialization...\r\n");
-	if (icm42688p_init(&hspi2)) {
-	  // 初始化成功信息已在 icm42688p_init 內部（或此處）打印
-	  printf("ICM-42688-P initialization Successfully.\r\n");
-	} else {
-	  printf("ICM-42688-P  Initialization failed Check your connection or configuration.\r\n");
-	  // 可以在此處加入錯誤處理邏輯，例如進入無限迴圈
-	  while(1) {
-		  // 錯誤狀態，閃爍 LED 或其他指示
-//    	  HAL_GPIO_TogglePin(LD1_GPIO_Port, LD1_Pin); // 假設 LD1 已配置
-		  HAL_Delay(200);
-	  }
-	}
+	HAL_Delay(2000);
+	/* Initialize RM-3100 sensor ----------------------------------------------------------*/
+
+	/* Initialize BMI-088 sensor ----------------------------------------------------------*/
+	 HAL_StatusTypeDef BMI088_status;
+	      printf("<BMI-088> System initialization...\r\n");
+	      // 使用 for 迴圈嘗試初始化，最多10次
+	      for (attempt_count = 1; attempt_count <= MAX_INIT_ATTEMPTS; ++attempt_count) {
+	    	  BMI088_status = BMI088_Init(); // 執行初始化
+	          if (BMI088_status == SENSOR_OK) {
+	              // 如果成功，就跳出迴圈，attempt_count歸零
+	        	  attempt_count = 0;
+	              break;
+	          }
+	          // 如果失敗，印出嘗試失敗的訊息
+	          printf("<BMI-088> Initialization FAILED on attempt %d/%d. Retrying...\r\n", attempt_count, MAX_INIT_ATTEMPTS);
+	          HAL_Delay(200); // 在下次嘗試前延遲一小段時間，讓感測器有時間重置
+	      }
+	      // 在迴圈結束後，根據最終的狀態來判斷並印出訊息
+	      if (BMI088_status == SENSOR_OK) {
+	          printf("<BMI-088> Initialization Successfully on attempt #%d\r\n", attempt_count);
+	      } else {
+	    	  printf("<BMI-088> Initialization FAILED Error Code: %d\r\n", BMI088_status);
+	      }
+	      HAL_Delay(2000);
+	//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+		printf("<BMI-088> System initialization...\r\n");
+		HAL_StatusTypeDef BMI088_status;
+		BMI088_status = BMI088_Init();//BMI088_Init
+		if (BMI088_status == SENSOR_OK) {
+		  printf("<BMI-088> initialization Successfully.\r\n");
+		} else {
+			printf("<BMI-088> Initialization Failed. Error Code: %d\r\n", BMI088_status);
+		  // 根據錯誤碼進行處理，例如進入錯誤狀態迴圈while(1){}
+		}
+		HAL_Delay(2000);
+		/* Initialize BMI-088 sensor ----------------------------------------------------------*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -151,29 +251,43 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-	  printf("ICM20948 \n");
+	  printf("-----------------------<ICM20948>----------------------- \n");
 	  ICM20948_Main();
 	  HAL_Delay(1000);
-	  printf("ICP20100 \n");
+	  printf("-----------------------<ICP20100>----------------------- \n");
 	  ICP20100_Main(&hi2c2);
 	  HAL_Delay(1000);
-	  // 讀取加速計原始數據
+	  printf("-----------------------<ICM42688p>----------------------- \n");
+	  // icm42688p讀取加速計原始數據
 	  icm42688p_read_accel_raw(&hspi2, accel_data);
-	  // 讀取陀螺儀原始數據
+	  // icm42688p讀取陀螺儀原始數據
 	  icm42688p_read_gyro_raw(&hspi2, gyro_data);
-	  // 透過 printf 輸出數據 (繁體中文標籤)
-	  // 確保 accel_data 和 gyro_data 陣列的索引正確 (0=X, 1=Y, 2=Z)
-	  printf("icm42688p \n");
-	  printf("accel_data: X=%6d, Y=%6d, Z=%6d\r\n", accel_data[0], accel_data[1], accel_data[2]);
-	  printf("gyro_data: X=%6d, Y=%6d, Z=%6d\r\n\r\n", gyro_data[0], gyro_data[1], gyro_data[2]);
+	  //icm42688p 將原始數據轉換為物理單位
+	  ICM42688p_ConvertAccelRawToG(accel_data, ICM42688paccel_g);
+	  ICM42688p_ConvertGyroRawToDPS(gyro_data, ICM42688pgyro_dps);
+	  //icm42688p 確保 accel_data 和 gyro_data 陣列的索引正確 (0=X, 1=Y, 2=Z)
+	  printf("<ICM42688p> accel_data: X=%.2f, Y=%.2f, Z=%.2f\r\n", ICM42688paccel_g[0], ICM42688paccel_g[1], ICM42688paccel_g[2]);
+	  printf("<ICM42688p> gyro_data: X=%.2f, Y=%.2f, Z=%.2f\r\n", ICM42688pgyro_dps[0], ICM42688pgyro_dps[1], ICM42688pgyro_dps[2]);
+	  printf("The data is OK\r\n");
 	  HAL_Delay(1000);
+	  printf("-----------------------<RM-3100>----------------------- \n");
+	  RM3100_Main(&hi2c4, &magData);
+	  HAL_Delay(1000);
+	  printf("-----------------------<BMI-088>----------------------- \n");
+	  BMI088_Main();
+//	  printf("Failed to read data from BMI-088. Error Code: 4\r\n");
+	  printf("-----------------------Test End----------------------- \r\n\r\n");
+	  while (1)
+	   {}
 	 // <<< 新增：呼叫封裝好的函數 >>>
 	 //ICM42688P_Main(&hspi2); // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< 新增這一行
+//	  while(1){
+//		  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_SET);
+//		  HAL_Delay(100);
+//		  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_RESET);
+//		  HAL_Delay(100);
+//	  }
 
-	  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_SET);
-	  HAL_Delay(100);
-	  HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_RESET);
-	  HAL_Delay(100);
 //	  printf("archer %d \n",WWE);
 //	  WWE++;
   }
@@ -231,7 +345,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB3CLKDivider = RCC_APB3_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_APB1_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV1;
-  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV1;
+  RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_1) != HAL_OK)
   {
@@ -284,6 +398,54 @@ static void MX_I2C2_Init(void)
   /* USER CODE BEGIN I2C2_Init 2 */
 
   /* USER CODE END I2C2_Init 2 */
+
+}
+
+/**
+  * @brief I2C4 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C4_Init(void)
+{
+
+  /* USER CODE BEGIN I2C4_Init 0 */
+
+  /* USER CODE END I2C4_Init 0 */
+
+  /* USER CODE BEGIN I2C4_Init 1 */
+
+  /* USER CODE END I2C4_Init 1 */
+  hi2c4.Instance = I2C4;
+  hi2c4.Init.Timing = 0x00707CBB;
+  hi2c4.Init.OwnAddress1 = 0;
+  hi2c4.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c4.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c4.Init.OwnAddress2 = 0;
+  hi2c4.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+  hi2c4.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c4.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Analogue filter
+  */
+  if (HAL_I2CEx_ConfigAnalogFilter(&hi2c4, I2C_ANALOGFILTER_ENABLE) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Digital filter
+  */
+  if (HAL_I2CEx_ConfigDigitalFilter(&hi2c4, 0) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C4_Init 2 */
+
+  /* USER CODE END I2C4_Init 2 */
 
 }
 
@@ -384,6 +546,54 @@ static void MX_SPI2_Init(void)
 }
 
 /**
+  * @brief SPI3 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_SPI3_Init(void)
+{
+
+  /* USER CODE BEGIN SPI3_Init 0 */
+
+  /* USER CODE END SPI3_Init 0 */
+
+  /* USER CODE BEGIN SPI3_Init 1 */
+
+  /* USER CODE END SPI3_Init 1 */
+  /* SPI3 parameter configuration*/
+  hspi3.Instance = SPI3;
+  hspi3.Init.Mode = SPI_MODE_MASTER;
+  hspi3.Init.Direction = SPI_DIRECTION_2LINES;
+  hspi3.Init.DataSize = SPI_DATASIZE_8BIT;
+  hspi3.Init.CLKPolarity = SPI_POLARITY_HIGH;
+  hspi3.Init.CLKPhase = SPI_PHASE_2EDGE;
+  hspi3.Init.NSS = SPI_NSS_SOFT;
+  hspi3.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_16;
+  hspi3.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi3.Init.TIMode = SPI_TIMODE_DISABLE;
+  hspi3.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
+  hspi3.Init.CRCPolynomial = 0x0;
+  hspi3.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
+  hspi3.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
+  hspi3.Init.FifoThreshold = SPI_FIFO_THRESHOLD_01DATA;
+  hspi3.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi3.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
+  hspi3.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
+  hspi3.Init.MasterInterDataIdleness = SPI_MASTER_INTERDATA_IDLENESS_00CYCLE;
+  hspi3.Init.MasterReceiverAutoSusp = SPI_MASTER_RX_AUTOSUSP_DISABLE;
+  hspi3.Init.MasterKeepIOState = SPI_MASTER_KEEP_IO_STATE_DISABLE;
+  hspi3.Init.IOSwap = SPI_IO_SWAP_DISABLE;
+  if (HAL_SPI_Init(&hspi3) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN SPI3_Init 2 */
+
+  /* USER CODE END SPI3_Init 2 */
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -400,15 +610,15 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
+  __HAL_RCC_GPIOE_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
-  __HAL_RCC_GPIOE_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(SPI2_NCS1_ICM42688P_GPIO_Port, SPI2_NCS1_ICM42688P_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(ICM20948_CS_GPIO_Port, ICM20948_CS_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(GPIOD, SPI3_nCS1_BMI088_ACCEL_Pin|ICM20948_CS_Pin|SPI3_nCS2_BMI088_GYRO_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOE, GPIO_PIN_1, GPIO_PIN_RESET);
@@ -419,12 +629,25 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(ICM20948_DRDY_GPIO_Port, &GPIO_InitStruct);
 
+  /*Configure GPIO pins : SPI3_DRDY1_BMI088_INT1_ACCEL_Pin SPI3_DRDY2_BMI088_INT3_GYRO_Pin */
+  GPIO_InitStruct.Pin = SPI3_DRDY1_BMI088_INT1_ACCEL_Pin|SPI3_DRDY2_BMI088_INT3_GYRO_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
   /*Configure GPIO pin : SPI2_NCS1_ICM42688P_Pin */
   GPIO_InitStruct.Pin = SPI2_NCS1_ICM42688P_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_PULLUP;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(SPI2_NCS1_ICM42688P_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SPI3_nCS1_BMI088_ACCEL_Pin SPI3_nCS2_BMI088_GYRO_Pin */
+  GPIO_InitStruct.Pin = SPI3_nCS1_BMI088_ACCEL_Pin|SPI3_nCS2_BMI088_GYRO_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pin : ICM20948_CS_Pin */
   GPIO_InitStruct.Pin = ICM20948_CS_Pin;

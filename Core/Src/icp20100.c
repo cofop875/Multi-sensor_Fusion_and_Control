@@ -6,7 +6,7 @@
  */
 #include "icp20100.h"
 #include <stdio.h> // 用於除錯 printf
-
+#include "sensor_error_handler.h" //錯誤處理
 // I2C 通訊逾時時間
 #define I2C_TIMEOUT 100 // 單位 ms
 
@@ -24,7 +24,7 @@ static ICP20100_StatusTypeDef icp20100_read_burst(I2C_HandleTypeDef *hi2c, uint8
   */
 static ICP20100_StatusTypeDef icp20100_read_register(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t *data) {
     if (HAL_I2C_Mem_Read(hi2c, ICP20100_I2C_ADDR, reg_addr, I2C_MEMADD_SIZE_8BIT, data, 1, I2C_TIMEOUT)!= HAL_OK) {
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
     return ICP20100_OK;
 }
@@ -38,7 +38,7 @@ static ICP20100_StatusTypeDef icp20100_read_register(I2C_HandleTypeDef *hi2c, ui
   */
 static ICP20100_StatusTypeDef icp20100_write_register(I2C_HandleTypeDef *hi2c, uint8_t reg_addr, uint8_t data) {
     if (HAL_I2C_Mem_Write(hi2c, ICP20100_I2C_ADDR, reg_addr, I2C_MEMADD_SIZE_8BIT, &data, 1, I2C_TIMEOUT)!= HAL_OK) {
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
     return ICP20100_OK;
 }
@@ -53,7 +53,7 @@ static ICP20100_StatusTypeDef icp20100_write_register(I2C_HandleTypeDef *hi2c, u
   */
 static ICP20100_StatusTypeDef icp20100_read_burst(I2C_HandleTypeDef *hi2c, uint8_t start_reg_addr, uint8_t *data, uint16_t len) {
     if (HAL_I2C_Mem_Read(hi2c, ICP20100_I2C_ADDR, start_reg_addr, I2C_MEMADD_SIZE_8BIT, data, len, I2C_TIMEOUT)!= HAL_OK) {
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
     return ICP20100_OK;
 }
@@ -74,20 +74,20 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
     // 1. 檢查 I2C 通訊是否正常 (嘗試讀取 DEVICE_ID)
     if (icp20100_read_register(hi2c, ICP20100_REG_DEVICE_ID, &device_id)!= ICP20100_OK) {
         //printf("Error: Failed to communicate with ICP-20100.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
 
     // 2. 核對 DEVICE_ID
     if (device_id!= ICP20100_EXPECTED_DEVICE_ID) {
         //printf("Error: ICP-20100 Device ID mismatch. Expected 0x%02X, Got 0x%02X\r\n", ICP20100_EXPECTED_DEVICE_ID, device_id);
-        return ICP20100_ERROR_ID_MISMATCH;
+        return SENSOR_INVALID_ID;
     }
     //printf("ICP-20100 Device ID: 0x%02X - OK\r\n", device_id);
 
     // 3. 讀取 ASIC 版本
     if (icp20100_read_register(hi2c, ICP20100_REG_VERSION, &version)!= ICP20100_OK) {
         //printf("Error: Failed to read ICP-20100 version.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
     //printf("ICP-20100 ASIC Version: 0x%02X\r\n", version);
 
@@ -103,7 +103,7 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
         //printf("ICP-20100 Version A detected. Checking BOOT_UP_STATUS.\r\n");
         // 檢查 BOOT_UP_STATUS (OTP_STATUS2)
         if (icp20100_read_register(hi2c, ICP20100_REG_OTP_STATUS2, &otp_status2)!= ICP20100_OK) {
-            return ICP20100_ERROR_I2C;
+            return SENSOR_COMM_FAIL;
         }
         if (!(otp_status2 & 0x01)) {
             // BOOT_UP_STATUS 為 0，表示可能需要完整的 OTP 初始化序列。
@@ -124,7 +124,7 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
     //    為確保可配置模式，先解鎖。
     if (icp20100_write_register(hi2c, ICP20100_REG_MASTER_LOCK, 0x01)!= ICP20100_OK) { // 寫入非0值解鎖
          //printf("Error: Failed to unlock master registers.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
 
     // 6. 等待模式同步狀態 (MODE_SYNC_STATUS in DEVICE_STATUS) 變為 1
@@ -132,7 +132,7 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
     uint8_t retry_count = 10;
     do {
         if (icp20100_read_register(hi2c, ICP20100_REG_DEVICE_STATUS, &mode_sync_status)!= ICP20100_OK) {
-            return ICP20100_ERROR_I2C;
+            return SENSOR_COMM_FAIL;
         }
         if (mode_sync_status & 0x01) break; // MODE_SYNC_STATUS is bit 0
         HAL_Delay(10); // 短暫延遲
@@ -159,14 +159,14 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
     uint8_t mode_select_val = 0x08;
     if (icp20100_write_register(hi2c, ICP20100_REG_MODE_SELECT, mode_select_val)!= ICP20100_OK) {
         //printf("Error: Failed to set measurement mode.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
    // printf("ICP-20100 set to Mode0 continuous measurement.\r\n");
 
     // 8. 鎖定主暫存器 (寫入 0x00)
     if (icp20100_write_register(hi2c, ICP20100_REG_MASTER_LOCK, 0x00)!= ICP20100_OK) {
         //printf("Error: Failed to lock master registers.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
 
     // 延遲替代 HAL_Delay(1000)暫時解決HAL_Delay時會當掉問題
@@ -175,7 +175,7 @@ ICP20100_StatusTypeDef icp20100_init(I2C_HandleTypeDef *hi2c) {
     	      }
 //    HAL_Delay(10); // 等待模式穩定
 
-    return ICP20100_OK;
+    return SENSOR_OK;
 }
 
 /**
@@ -192,7 +192,7 @@ ICP20100_StatusTypeDef icp20100_get_pressure_temp(I2C_HandleTypeDef *hi2c, float
     // 順序：P0, P1, P2, T0, T1, T2
     if (icp20100_read_burst(hi2c, ICP20100_REG_PRESS_DATA_0, raw_data, 6)!= ICP20100_OK) {
         //printf("Error: Failed to read P/T data burst.\r\n");
-        return ICP20100_ERROR_I2C;
+        return SENSOR_COMM_FAIL;
     }
 
     // 解析 20 位元壓力數據 (二補數)
@@ -221,7 +221,7 @@ ICP20100_StatusTypeDef icp20100_get_pressure_temp(I2C_HandleTypeDef *hi2c, float
 
     // 轉換為實際物理值
     // 壓力轉換公式: P_Pa = * 1000
-    *pressure = ((((float)p_out_raw / (float)(1 << 17)) * 40.0f) + 70.0f) * 1000.0f;
+    *pressure = ((((float)p_out_raw / (float)(1 << 17)) * 40.0f) + 70.0f) * 10.0f;//試著改成10.0f(原本1000.0f)
 
     // 溫度轉換公式: T_C = (T_OUT / 2^18) * 65 + 25
     *temperature = (((float)t_out_raw / (float)(1 << 18)) * 65.0f) + 25.0f;
@@ -238,11 +238,12 @@ void ICP20100_Main(I2C_HandleTypeDef *hi2c){
 	  if (sensor_status == ICP20100_OK) {
 		// 透過 printf 輸出數據
 		// 使用者已實作 _write，printf 應能正常工作
-		printf("Pressure: %.2f Pa, Temperature: %.2f C\r\n", pressure, temperature);
+		printf("<ICP20100>Pressure: %.2f Pa, Temperature: %.2f C\r\n", pressure, temperature);
+		printf("The data is OK\r\n");
 		// 測試修改1: 輸出整數 (會損失精度，僅為測試)
 	//	        printf("Pressure_int: %d Pa, Temperature_int: %d C\r\n", (int)pressure, (int)temperature);
 	  } else {
-		//printf("Failed to read data from ICP-20100. Error Code: %d\r\n", sensor_status);
+		printf("Failed to read data from ICP-20100. Error Code: %d\r\n", sensor_status);
 		// 可加入錯誤處理邏輯，例如嘗試重新初始化感測器
 		//HAL_Delay(1000); // 錯誤發生時延遲，避免快速重複失敗
 		// 嘗試重新初始化

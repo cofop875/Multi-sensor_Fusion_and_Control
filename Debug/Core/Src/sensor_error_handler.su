@@ -1,0 +1,2 @@
+../Core/Src/sensor_error_handler.c:14:13:sensor_error_to_string	16	static
+../Core/Src/sensor_error_handler.c:36:6:handle_sensor_error	160	static

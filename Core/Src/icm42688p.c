@@ -1,12 +1,13 @@
 #include "icm42688p.h"
 #include <stdio.h> // 用於 printf (除錯)
-
+#include "sensor_error_handler.h" //錯誤處理
 // ICM-42688-P nCS 引腳定義 (根據 User Label)
 #define ICM42688P_NCS_PORT GPIOB
 #define ICM42688P_NCS_PIN  GPIO_PIN_11
 
 // --- 內部輔助函數 ---
-
+static float current_accel_sensitivity = ACCEL_SENSITIVITY_2G;
+static float current_gyro_sensitivity = GYRO_SENSITIVITY_250DPS;
 // 選中 ICM-42688-P (nCS 拉低)
 static void icm42688p_select(void) {
     HAL_GPIO_WritePin(ICM42688P_NCS_PORT, ICM42688P_NCS_PIN, GPIO_PIN_RESET);
@@ -74,14 +75,14 @@ static HAL_StatusTypeDef icm42688p_set_bank(SPI_HandleTypeDef *hspi, uint8_t ban
 uint8_t icm42688p_init(SPI_HandleTypeDef *hspi) {
     uint8_t who_am_i_value;
     uint8_t temp_reg_val;
-
+    uint8_t test_reg_val;
     icm42688p_deselect(); // 確保 nCS 初始為高電位
     HAL_Delay(10); // 感測器上電後短暫延遲
 
     // 1. 切換到 User Bank 0 (大部分配置暫存器位於此)
     if (icm42688p_set_bank(hspi, 0)!= HAL_OK) {
         printf("ICM Error: Set Bank 0 failed\r\n");
-        return 0; // 返回 0 表示初始化失敗
+        return SENSOR_INIT_FAIL; // 返回 0 表示初始化失敗
     }
     HAL_Delay(100); // 切換 Bank 後延遲(此處數值原為1，某些情況貌似太快導致who_am_i_value = 0x0，初始化失敗，可視情況調整!)
 
@@ -89,7 +90,7 @@ uint8_t icm42688p_init(SPI_HandleTypeDef *hspi) {
     who_am_i_value = icm42688p_read_who_am_i(hspi); // 此函數內部已處理 Bank 切換
     if (who_am_i_value!= ICM42688P_WHO_AM_I_VALUE) {
         printf("ICM Error: WHO_AM_I check failed. Expected 0x%02X, Got 0x%02X\r\n", ICM42688P_WHO_AM_I_VALUE, who_am_i_value);
-        return 0;
+        return SENSOR_INVALID_ID;
     }
     // 移除此處的 printf，移至 main.c 中判斷後打印
     // printf("ICM Info: WHO_AM_I = 0x%02X (OK)\r\n", who_am_i_value);
@@ -97,17 +98,20 @@ uint8_t icm42688p_init(SPI_HandleTypeDef *hspi) {
     // 3. 配置電源管理 PWR_MGMT0 (0x4E)
     //    啟用加速計和陀螺儀，均設為低噪音 (LN) 模式
     //    ACCEL_MODE[1:0] = 11 (LN), GYRO_MODE[1:0] = 11 (LN) -> 0b00001111 = 0x0F
+
     if (icm42688p_write_register(hspi, ICM42688P_REG_PWR_MGMT0, ICM42688P_PWR_MGMT0_ACCEL_LN | ICM42688P_PWR_MGMT0_GYRO_LN)!= HAL_OK) {
         // printf("ICM Error: PWR_MGMT0 config failed\r\n"); // 移至 main.c
-        return 0;
+        return SENSOR_CONFIG_FAIL;
     }
     HAL_Delay(1); // 模式更改後需要穩定時間 (datasheet 建議 1ms for gyro, 1ms for accel from sleep to LN)
+//    test_reg_val = icm42688p_read_register(hspi, ICM42688P_REG_PWR_MGMT0);
+//    printf("ICM42688P_REG_PWR_MGMT0: 0x%02X\r\n", test_reg_val);
 
     // 4. 配置陀螺儀 GYRO_CONFIG0 (0x4F)
     //    設定 ODR = 1kHz (0x06), FS_SEL = ±2000 dps (0x00 << 4)
     if (icm42688p_write_register(hspi, ICM42688P_REG_GYRO_CONFIG0, ICM42688P_GYRO_FS_SEL_2000DPS | ICM42688P_ODR_1KHZ)!= HAL_OK) {
         // printf("ICM Error: GYRO_CONFIG0 failed\r\n"); // 移至 main.c
-        return 0;
+        return SENSOR_CONFIG_FAIL;
     }
     HAL_Delay(1);
 
@@ -115,7 +119,7 @@ uint8_t icm42688p_init(SPI_HandleTypeDef *hspi) {
     //    設定 ODR = 1kHz (0x06), FS_SEL = ±16g (0x00 << 4)
     if (icm42688p_write_register(hspi, ICM42688P_REG_ACCEL_CONFIG0, ICM42688P_ACCEL_FS_SEL_16G | ICM42688P_ODR_1KHZ)!= HAL_OK) {
         // printf("ICM Error: ACCEL_CONFIG0 failed\r\n"); // 移至 main.c
-        return 0;
+        return SENSOR_CONFIG_FAIL;
     }
     HAL_Delay(1);
 
@@ -125,12 +129,12 @@ uint8_t icm42688p_init(SPI_HandleTypeDef *hspi) {
     temp_reg_val = icm42688p_read_register(hspi, ICM42688P_REG_INT_CONFIG1); // 內部已處理 Bank 切換
     if (icm42688p_write_register(hspi, ICM42688P_REG_INT_CONFIG1, temp_reg_val & ~ICM42688P_INT_ASYNC_RESET_BIT)!= HAL_OK) {
         // printf("ICM Error: INT_CONFIG1 (clear INT_ASYNC_RESET) failed\r\n"); // 移至 main.c
-        return 0;
+        return SENSOR_DATA_NOT_READY;
     }
     HAL_Delay(1);
 
     // printf("ICM-42688-P 初始化成功。\r\n"); // 移至 main.c
-    return 1; // 返回 1 表示初始化成功
+    return SENSOR_OK; // 返回 1 表示初始化成功
 }
 
 // 讀取 WHO_AM_I 暫存器
@@ -206,6 +210,27 @@ void icm42688p_read_accel_raw(SPI_HandleTypeDef *hspi, int16_t* accel_data) {
   * @param  hspi: 指向 SPI_HandleTypeDef 結構的指標，包含 SPI 配置信息。
   * @retval None
   */
+/**
+ * @brief 將加速計原始數據轉換為 g (重力加速度)。
+ * @param pAccelRaw: 指向加速計原始數據陣列 (int16_t[3])。
+ * @param pAccelG:   指向儲存轉換後數據的陣列 (float[3])。
+ */
+void ICM42688p_ConvertAccelRawToG(const int16_t* pAccelRaw, float* pAccelG) {
+    pAccelG[0] = (float)pAccelRaw[0] / current_accel_sensitivity;
+    pAccelG[1] = (float)pAccelRaw[1] / current_accel_sensitivity;
+    pAccelG[2] = (float)pAccelRaw[2] / current_accel_sensitivity;
+}
+
+/**
+ * @brief 將陀螺儀原始數據轉換為 dps (度/秒)。
+ * @param pGyroRaw: 指向陀螺儀原始數據陣列 (int16_t[3])。
+ * @param pGyroDPS: 指向儲存轉換後數據的陣列 (float[3])。
+ */
+void ICM42688p_ConvertGyroRawToDPS(const int16_t* pGyroRaw, float* pGyroDPS) {
+    pGyroDPS[0] = (float)pGyroRaw[0] / current_gyro_sensitivity;
+    pGyroDPS[1] = (float)pGyroRaw[1] / current_gyro_sensitivity;
+    pGyroDPS[2] = (float)pGyroRaw[2] / current_gyro_sensitivity;
+}
 void ICM42688P_Main(SPI_HandleTypeDef *hspi) {
     int16_t accel_data[3]; // 在此函數內部宣告陣列
     int16_t gyro_data[3];  // 在此函數內部宣告陣列

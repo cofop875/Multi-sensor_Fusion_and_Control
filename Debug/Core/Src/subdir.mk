@@ -5,10 +5,13 @@
 
 # Add inputs and outputs from these tool invocations to the build variables 
 C_SRCS += \
+../Core/Src/BMI088.c \
 ../Core/Src/icm20948_driver.c \
 ../Core/Src/icm42688p.c \
 ../Core/Src/icp20100.c \
 ../Core/Src/main.c \
+../Core/Src/rm3100.c \
+../Core/Src/sensor_error_handler.c \
 ../Core/Src/stm32h7xx_hal_msp.c \
 ../Core/Src/stm32h7xx_it.c \
 ../Core/Src/syscalls.c \
@@ -16,10 +19,13 @@ C_SRCS += \
 ../Core/Src/system_stm32h7xx.c 
 
 OBJS += \
+./Core/Src/BMI088.o \
 ./Core/Src/icm20948_driver.o \
 ./Core/Src/icm42688p.o \
 ./Core/Src/icp20100.o \
 ./Core/Src/main.o \
+./Core/Src/rm3100.o \
+./Core/Src/sensor_error_handler.o \
 ./Core/Src/stm32h7xx_hal_msp.o \
 ./Core/Src/stm32h7xx_it.o \
 ./Core/Src/syscalls.o \
@@ -27,10 +33,13 @@ OBJS += \
 ./Core/Src/system_stm32h7xx.o 
 
 C_DEPS += \
+./Core/Src/BMI088.d \
 ./Core/Src/icm20948_driver.d \
 ./Core/Src/icm42688p.d \
 ./Core/Src/icp20100.d \
 ./Core/Src/main.d \
+./Core/Src/rm3100.d \
+./Core/Src/sensor_error_handler.d \
 ./Core/Src/stm32h7xx_hal_msp.d \
 ./Core/Src/stm32h7xx_it.d \
 ./Core/Src/syscalls.d \
@@ -45,7 +54,7 @@ Core/Src/%.o Core/Src/%.su Core/Src/%.cyclo: ../Core/Src/%.c Core/Src/subdir.mk
 clean: clean-Core-2f-Src
 
 clean-Core-2f-Src:
-	-$(RM) ./Core/Src/icm20948_driver.cyclo ./Core/Src/icm20948_driver.d ./Core/Src/icm20948_driver.o ./Core/Src/icm20948_driver.su ./Core/Src/icm42688p.cyclo ./Core/Src/icm42688p.d ./Core/Src/icm42688p.o ./Core/Src/icm42688p.su ./Core/Src/icp20100.cyclo ./Core/Src/icp20100.d ./Core/Src/icp20100.o ./Core/Src/icp20100.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su
+	-$(RM) ./Core/Src/BMI088.cyclo ./Core/Src/BMI088.d ./Core/Src/BMI088.o ./Core/Src/BMI088.su ./Core/Src/icm20948_driver.cyclo ./Core/Src/icm20948_driver.d ./Core/Src/icm20948_driver.o ./Core/Src/icm20948_driver.su ./Core/Src/icm42688p.cyclo ./Core/Src/icm42688p.d ./Core/Src/icm42688p.o ./Core/Src/icm42688p.su ./Core/Src/icp20100.cyclo ./Core/Src/icp20100.d ./Core/Src/icp20100.o ./Core/Src/icp20100.su ./Core/Src/main.cyclo ./Core/Src/main.d ./Core/Src/main.o ./Core/Src/main.su ./Core/Src/rm3100.cyclo ./Core/Src/rm3100.d ./Core/Src/rm3100.o ./Core/Src/rm3100.su ./Core/Src/sensor_error_handler.cyclo ./Core/Src/sensor_error_handler.d ./Core/Src/sensor_error_handler.o ./Core/Src/sensor_error_handler.su ./Core/Src/stm32h7xx_hal_msp.cyclo ./Core/Src/stm32h7xx_hal_msp.d ./Core/Src/stm32h7xx_hal_msp.o ./Core/Src/stm32h7xx_hal_msp.su ./Core/Src/stm32h7xx_it.cyclo ./Core/Src/stm32h7xx_it.d ./Core/Src/stm32h7xx_it.o ./Core/Src/stm32h7xx_it.su ./Core/Src/syscalls.cyclo ./Core/Src/syscalls.d ./Core/Src/syscalls.o ./Core/Src/syscalls.su ./Core/Src/sysmem.cyclo ./Core/Src/sysmem.d ./Core/Src/sysmem.o ./Core/Src/sysmem.su ./Core/Src/system_stm32h7xx.cyclo ./Core/Src/system_stm32h7xx.d ./Core/Src/system_stm32h7xx.o ./Core/Src/system_stm32h7xx.su
 
 .PHONY: clean-Core-2f-Src
 

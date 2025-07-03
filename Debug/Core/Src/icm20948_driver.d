@@ -30,7 +30,7 @@ Core/Src/icm20948_driver.o: ../Core/Src/icm20948_driver.c \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_pwr_ex.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h \
- ../Core/Inc/main.h
+ ../Core/Inc/main.h ../Core/Inc/sensor_error_handler.h
 ../Core/Inc/icm20948_driver.h:
 ../Core/Inc/main.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
@@ -64,3 +64,4 @@ Core/Src/icm20948_driver.o: ../Core/Src/icm20948_driver.c \
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h:
 ../Core/Inc/main.h:
+../Core/Inc/sensor_error_handler.h:

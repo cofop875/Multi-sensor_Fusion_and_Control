@@ -76,11 +76,23 @@
 #define ICM42688P_REG_INT_CONFIG1     0x64 // 中斷配置1 (INT_ASYNC_RESET_BIT 位於此), Datasheet page 73
 #define ICM42688P_INT_ASYNC_RESET_BIT (1 << 4) // INT_CONFIG1 中的 INT_ASYNC_RESET 位
 
+// --- 靈敏度定義 (根據全量程範圍 FSR 設定) ---
+#define ACCEL_SENSITIVITY_2G    16384.0f // 加速計 ±2g 量程下的靈敏度 (LSB/g)
+#define ACCEL_SENSITIVITY_4G    8192.0f  // 加速計 ±4g 量程下的靈敏度 (LSB/g)
+#define ACCEL_SENSITIVITY_8G    4096.0f  // 加速計 ±8g 量程下的靈敏度 (LSB/g)
+#define ACCEL_SENSITIVITY_16G   2048.0f  // 加速計 ±16g 量程下的靈敏度 (LSB/g)
+
+#define GYRO_SENSITIVITY_250DPS 131.0f   // 陀螺儀 ±250 dps 量程下的靈敏度 (LSB/dps)
+#define GYRO_SENSITIVITY_500DPS 65.5f    // 陀螺儀 ±500 dps 量程下的靈敏度 (LSB/dps)
+#define GYRO_SENSITIVITY_1000DPS 32.8f   // 陀螺儀 ±1000 dps 量程下的靈敏度 (LSB/dps)
+#define GYRO_SENSITIVITY_2000DPS 16.4f   // 陀螺儀 ±2000 dps 量程下的靈敏度 (LSB/dps)
 // 函數原型宣告
 uint8_t icm42688p_init(SPI_HandleTypeDef *hspi); // 初始化 ICM-42688-P
 uint8_t icm42688p_read_who_am_i(SPI_HandleTypeDef *hspi); // 讀取 WHO_AM_I 暫存器
 void icm42688p_read_gyro_raw(SPI_HandleTypeDef *hspi, int16_t* gyro_data); // 讀取陀螺儀原始數據 (3軸)
 void icm42688p_read_accel_raw(SPI_HandleTypeDef *hspi, int16_t* accel_data); // 讀取加速計原始數據 (3軸)
+void ICM42688p_ConvertAccelRawToG(const int16_t* pAccelRaw, float* pAccelG);
+void ICM42688p_ConvertGyroRawToDPS(const int16_t* pGyroRaw, float* pGyroDPS);
 // <<< 新增的主處理函數原型 >>>
 void ICM42688P_Main(SPI_HandleTypeDef *hspi); // <<<<<<<<<<<<<<< 新增這一行
 // (可選) 若要暴露底層讀寫函數，可取消以下註解

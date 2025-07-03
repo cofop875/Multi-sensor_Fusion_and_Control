@@ -1,4 +1,4 @@
-Core/Src/icm42688p.o: ../Core/Src/icm42688p.c ../Core/Inc/icm42688p.h \
+Core/Src/rm3100.o: ../Core/Src/rm3100.c ../Core/Inc/rm3100.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h \
  ../Core/Inc/stm32h7xx_hal_conf.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h \
@@ -30,7 +30,7 @@ Core/Src/icm42688p.o: ../Core/Src/icm42688p.c ../Core/Inc/icm42688p.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi.h \
  ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_spi_ex.h \
  ../Core/Inc/sensor_error_handler.h
-../Core/Inc/icm42688p.h:
+../Core/Inc/rm3100.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal.h:
 ../Core/Inc/stm32h7xx_hal_conf.h:
 ../Drivers/STM32H7xx_HAL_Driver/Inc/stm32h7xx_hal_rcc.h:

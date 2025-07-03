@@ -9,7 +9,7 @@
 #include "icm20948_driver.h"//SPI MODE 3
 #include "main.h" // 確保 SPI_HandleTypeDef 和 GPIO 定義被引入 (包含 ICM20948_CS_Pin 和 ICM20948_CS_GPIO_Port)
 #include <string.h> // 若有使用到 memcpy 等函式
-
+#include "sensor_error_handler.h" //錯誤處理
 // SPI 通訊逾時時間 (可依實際情況調整)
 #define SPI_TIMEOUT 100 // ms
 
@@ -294,47 +294,47 @@ HAL_StatusTypeDef ICM20948_Init(void) {
 
     // --- 1. 選擇使用者庫 0 ---
     status = ICM20948_SelectUserBank(0);
-    if (status != HAL_OK) return HAL_ERROR; // 如果切換庫失敗，則初始化失敗
+    if (status != HAL_OK) return SENSOR_ERROR; // 如果切換庫失敗，則初始化失敗
 
     // --- 2. 檢查 WHO_AM_I 暫存器 ---
     status = ICM20948_ReadByte(ICM20948_WHO_AM_I, &who_am_i_val);
     if (status != HAL_OK || who_am_i_val != 0xEA) { // 0xEA 是 ICM-20948 的預期值
         // 可以嘗試多次讀取 WHO_AM_I，因為有時第一次通訊可能不穩定
-        HAL_Delay(1);
+        HAL_Delay(10);
         // 嘗試多次讀取@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         for (int i = 0; i < 10; i++) {
             status = ICM20948_ReadByte(ICM20948_WHO_AM_I, &who_am_i_val);
             if (status == HAL_OK) {
-                printf("WHO_AM_I: 0x%02X (Attempt %d)\r\n", who_am_i_val, i + 1);
+//                printf("WHO_AM_I: 0x%02X (Attempt %d)\r\n", who_am_i_val, i + 1);
             } else {
-                printf("Read WHO_AM_I FAILED, Status: %d (Attempt %d)\r\n", status, i + 1);
+//                printf("Read WHO_AM_I FAILED, Status: %d (Attempt %d)\r\n", status, i + 1);
             }
             HAL_Delay(50);
         }
         // 嘗試多次讀取@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
         status = ICM20948_ReadByte(ICM20948_WHO_AM_I, &who_am_i_val);
         if (status != HAL_OK || who_am_i_val != 0xEA) {
-             return HAL_ERROR; // 裝置識別失敗
+             return SENSOR_INVALID_ID; // 裝置識別失敗
         }
     }
 
     // --- 3. 重設並喚醒裝置 ---
     // 寫入 0x80 到 PWR_MGMT_1 (DEVICE_RESET = 1)
     status = ICM20948_WriteByte(ICM20948_PWR_MGMT_1, 0x80);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_PARAM_INVALID;
     HAL_Delay(100); // 等待重設完成 (Datasheet 建議 100ms)
 
     // 從睡眠模式喚醒，並選擇時脈源
     // 寫入 0x01 到 PWR_MGMT_1 (CLKSEL = 1，選擇最佳可用時脈源，通常是內部20MHz振盪器, 自動選擇)
     // SLEEP = 0 (正常模式), TEMP_DIS = 0 (溫度感測器致能)
     status = ICM20948_WriteByte(ICM20948_PWR_MGMT_1, 0x01);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_DATA_NOT_READY;
     HAL_Delay(50); // 等待時脈穩定
 
     // --- 4. 配置加速計和陀螺儀 ---
     // 切換到使用者庫 2
     status = ICM20948_SelectUserBank(2);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_CONFIG_FAIL;
 
     // 加速計配置 (ACCEL_CONFIG)
     // ACCEL_FS_SEL: 00 = ±2g, 01 = ±4g, 10 = ±8g, 11 = ±16g (bits 2:1)
@@ -345,7 +345,7 @@ HAL_StatusTypeDef ICM20948_Init(void) {
     //              = (001 << 3)   | (00 << 1)        | 0
     //              = 0x08
     status = ICM20948_WriteByte(ICM20948_ACCEL_CONFIG, (0x01 << 3) | (0x00 << 1) | 0x00);
-    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return HAL_ERROR; }
+    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return SENSOR_CONFIG_FAIL; }
     current_accel_sensitivity = ACCEL_SENSITIVITY_2G; // 更新當前靈敏度
 
     // 陀螺儀配置 (GYRO_CONFIG_1)
@@ -357,7 +357,7 @@ HAL_StatusTypeDef ICM20948_Init(void) {
     //               = (001 << 3)   | (00 << 1)       | 0
     //               = 0x08
     status = ICM20948_WriteByte(ICM20948_GYRO_CONFIG_1, (0x01 << 3) | (0x00 << 1) | 0x00);
-    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return HAL_ERROR; }
+    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return SENSOR_CONFIG_FAIL; }
     current_gyro_sensitivity = GYRO_SENSITIVITY_250DPS; // 更新當前靈敏度
 
     // 設定取樣率分頻 (可選，預設為0，即最快取樣率 1.125kHz / (1+SMPLRT_DIV) )
@@ -370,34 +370,34 @@ HAL_StatusTypeDef ICM20948_Init(void) {
 
     // 切換回使用者庫 0
     status = ICM20948_SelectUserBank(0);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_ERROR;
 
     // --- 5. 配置 I2C 主機介面以與 AK09916 通訊 ---
     // 致能 I2C 主機模式 (USER_CTRL 的 I2C_MST_EN 位元 (bit 5))
     uint8_t user_ctrl_val;
     status = ICM20948_ReadByte(ICM20948_USER_CTRL, &user_ctrl_val);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_COMM_FAIL;
     user_ctrl_val |= (1 << 5); // 設定 I2C_MST_EN = 1 (啟用 I2C Master)
     user_ctrl_val |= (1 << 4); // 設定 I2C_IF_DIS = 1 (為 SPI 模式禁用 ICM 的 I2C Slave 介面)
     // user_ctrl_val &= ~(1 << 6); // 確保 I2C_IF_DIS = 0, 使能SPI和I2C同時工作 (如果需要SPI訪問ICM本身)
     status = ICM20948_WriteByte(ICM20948_USER_CTRL, user_ctrl_val);
-    if (status != HAL_OK) return HAL_ERROR;
-    HAL_Delay(50); // 等待 I2C 主機介面穩定
+    if (status != HAL_OK) return SENSOR_COMM_FAIL;
+    HAL_Delay(500); // 等待 I2C 主機介面穩定
 
     // 切換到使用者庫 3
     status = ICM20948_SelectUserBank(3);
-    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return HAL_ERROR; }
+    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return SENSOR_ERROR; }
 
     // 設定 I2C 主機時脈頻率 (I2C_MST_CTRL 的 I2C_MST_CLK bits 3:0)
     // 例如，設定為 400kHz (datasheet 建議值 0x07 for 345.6 kHz to 400 kHz)
     // 0x0D for ~100kHz if needed for stability with AK09916
     status = ICM20948_WriteByte(ICM20948_I2C_MST_CTRL, 0x07);
-    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return HAL_ERROR; }
+    if (status != HAL_OK) { ICM20948_SelectUserBank(0); return SENSOR_COMM_FAIL; }
     HAL_Delay(50);
 
     // 切換回使用者庫 0
     status = ICM20948_SelectUserBank(0);
-    if (status != HAL_OK) return HAL_ERROR;
+    if (status != HAL_OK) return SENSOR_COMM_FAIL;
 
     // --- 6. 初始化 AK09916 磁力計 ---
     // 檢查 AK09916 WIA2 (公司識別碼)
@@ -445,7 +445,7 @@ HAL_StatusTypeDef ICM20948_Init(void) {
     if (status != HAL_OK) {
         printf("AK09916 Soft Reset FAILED!\r\n");
         ICM20948_SelectUserBank(0); // 切回 UB0
-        return HAL_ERROR;
+        return SENSOR_CONFIG_FAIL;
     }
     HAL_Delay(100); // 等待復位完成
 
@@ -457,27 +457,26 @@ HAL_StatusTypeDef ICM20948_Init(void) {
     // **然後再檢查 AK09916 WIA2**
     status = AK09916_ReadByteViaICM(AK09916_WIA2, &ak09916_wia2_val);
     if (status != HAL_OK) {
-        printf("Reading AK09916 WIA2 FAILED after reset! Status: %d\r\n", status);
+//        printf("Reading AK09916 WIA2 FAILED after reset! Status: %d\r\n", status);
         ICM20948_SelectUserBank(0);
-        return HAL_ERROR;
+        return SENSOR_INVALID_ID;
     }
     if (ak09916_wia2_val != 0x09) {
-        printf("AK09916 WIA2 is 0x%02X, expected 0x09, after reset!\r\n", ak09916_wia2_val);
+//        printf("AK09916 WIA2 is 0x%02X, expected 0x09, after reset!\r\n", ak09916_wia2_val);
         ICM20948_SelectUserBank(0);
-        return HAL_ERROR; // AK09916 識別失敗
+        return SENSOR_INVALID_ID; // AK09916 識別失敗
     }
-    printf("AK09916 WIA2 OK: 0x%02X\r\n", ak09916_wia2_val);
+//    printf("AK09916 WIA2 OK: 0x%02X\r\n", ak09916_wia2_val);
 
     // **如果 WIA2 正確，再設定最終的操作模式**
     status = AK09916_WriteByteViaICM(AK09916_CNTL2, 0x08); // 例如連續量測模式 4 (100Hz)
     if (status != HAL_OK) {
         printf("Setting AK09916 Mode FAILED!\r\n");
         ICM20948_SelectUserBank(0);
-        return HAL_ERROR;
+        return SENSOR_INVALID_ID;
     }
     HAL_Delay(50); // 等待模式設定生效
-    //    @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    return HAL_OK; // 初始化成功
+    return SENSOR_OK; // 初始化成功
 }
 
 /**
@@ -580,9 +579,9 @@ HAL_StatusTypeDef ICM20948_ReadMagRaw(int16_t* pMag) {
     status = AK09916_ReadByteViaICM(AK09916_ST1, &st1_val);
     if (status != HAL_OK) return status;
 
-    if (!(st1_val & 0x01)) { // 檢查 DRDY (Data Ready) 位元 (bit 0)
-        return HAL_BUSY; // 數據尚未就緒 (Not an error, just not ready)
-    }
+//    if (!(st1_val & 0x01)) { // 檢查 DRDY (Data Ready) 位元 (bit 0)
+//        return HAL_BUSY; // 數據尚未就緒 (Not an error, just not ready)
+//    }
 
     // 2. 從 AK09916_HXL (0x11) 開始讀取 8 個位元組 (HXL to ST2)
     //    讀取 ST2 (0x18) 是為了讓 AK09916 準備下一次量測 (清除 DRDY 狀態並觸發下一次)
@@ -593,7 +592,16 @@ HAL_StatusTypeDef ICM20948_ReadMagRaw(int16_t* pMag) {
     pMag[0] = (int16_t)(((uint16_t)mag_buffer[1] << 8) | mag_buffer[0]); // Mag X (HXH, HXL)
     pMag[1] = (int16_t)(((uint16_t)mag_buffer[3] << 8) | mag_buffer[2]); // Mag Y (HYH, HYL)
     pMag[2] = (int16_t)(((uint16_t)mag_buffer[5] << 8) | mag_buffer[4]); // Mag Z (HZH, HZL)
+    //!!!如果收到的數值為零，再執行一次。
+    if(pMag[0] == 0 & pMag[1] == 0 & pMag[2] == 0){
+    	status = AK09916_ReadBytesViaICM(AK09916_HXL, mag_buffer, 8);
+		if (status != HAL_OK) return status;
 
+		// 3. 解析數據 (低位元組在前，小端模式 Little-Endian for AK09916)
+		pMag[0] = (int16_t)(((uint16_t)mag_buffer[1] << 8) | mag_buffer[0]); // Mag X (HXH, HXL)
+		pMag[1] = (int16_t)(((uint16_t)mag_buffer[3] << 8) | mag_buffer[2]); // Mag Y (HYH, HYL)
+		pMag[2] = (int16_t)(((uint16_t)mag_buffer[5] << 8) | mag_buffer[4]); // Mag Z (HZH, HZL)
+    }
     // mag_buffer[6] is RSV (Reserved)
     // mag_buffer[7] is ST2 (Status 2)
     // 檢查 ST2 暫存器中的 HOFL (Magnetic sensor overflow) 位元 (bit 3)
@@ -638,44 +646,65 @@ void ICM20948_ConvertMagRawToUT(const int16_t* pMagRaw, float* pMagUT) {
     pMagUT[1] = (float)pMagRaw[1] * MAG_SENSITIVITY_UT_LSB;
     pMagUT[2] = (float)pMagRaw[2] * MAG_SENSITIVITY_UT_LSB;
 }
+
 void ICM20948_Main(){
-	// 讀取加速計和陀螺儀原始數據
-		     if (ICM20948_ReadAccelGyroRaw(accel_raw, gyro_raw) == HAL_OK) {
+	//		     與ICM20948_Init(void)同程式搬過來============================Start(磁力計檢查)===========================================//新增ak09916_wia2_val_PART2 != 0x09判斷
+			     HAL_StatusTypeDef status = HAL_OK;
+			     uint8_t ak09916_wia2_val_PART2 = 0;
+			     // **然後再檢查 AK09916 WIA2**
+			         status = AK09916_ReadByteViaICM(AK09916_WIA2, &ak09916_wia2_val_PART2);
+			         if (status != HAL_OK) {
+//			             printf("Reading AK09916 WIA2 FAILED after reset! Status: %d\r\n", status);
+			             ICM20948_SelectUserBank(0);
+	//		             return SENSOR_INVALID_ID;
+			         }
+			         if (ak09916_wia2_val_PART2 != 0x09) {
+			             ICM20948_SelectUserBank(0);
+			             status = 6;//ak09916_wia2_val_PART2 != 0x09強制status = 6(SENSOR_INVALID_ID)(待修改，須更嚴謹)
+	//		             return SENSOR_INVALID_ID; // AK09916 識別失敗
+			         }
+	 //		     與ICM20948_Init(void)同程式搬過來==============================END(磁力計檢查)=========================================//新增ak09916_wia2_val_PART2 != 0x09判斷
+
+			         // 讀取加速計和陀螺儀原始數據
+		     if (ICM20948_ReadAccelGyroRaw(accel_raw, gyro_raw) == HAL_OK && ak09916_wia2_val_PART2 == 0x09) {
 		       // 將原始數據轉換為物理單位
 		       ICM20948_ConvertAccelRawToG(accel_raw, accel_g);
 		       ICM20948_ConvertGyroRawToDPS(gyro_raw, gyro_dps);
 
 		       // 透過 UART 輸出 (或使用除錯器查看變數)
-		       printf("Accel(g): X=%.2f, Y=%.2f, Z=%.2f | Gyro(dps): X=%.2f, Y=%.2f, Z=%.2f\r\n",
-		              accel_g[0], accel_g[1], accel_g[2],
-		               gyro_dps[0], gyro_dps[1], gyro_dps[2]);
+		       printf("<ICM20948>Accel(g): X=%.2f, Y=%.2f, Z=%.2f\r\n",
+		              accel_g[0], accel_g[1], accel_g[2]);
+		       printf("<ICM20948>Gyro(dps): X=%.2f, Y=%.2f, Z=%.2f\r\n",
+					  gyro_dps[0], gyro_dps[1], gyro_dps[2]);
 	//	       printf("%s"); // 或 HAL_UART_Transmit(&huartx, (uint8_t*)uart_buf, strlen(uart_buf), HAL_MAX_DELAY);
-
+		       printf("The data is OK\r\n");
 		     } else {
 		    	 //讀取 Accel/Gyro 數據失敗
-		       printf("Failed to read Accel/Gyro data!\r\n");
+		       printf("<ICM20948>Failed to read data! Error Code: %d\r\n",status);
 		     }
 
 		     // 讀取磁力計原始數據
+		     HAL_Delay(1000); // 每秒讀取一次數據
+//
 		     HAL_StatusTypeDef mag_status = ICM20948_ReadMagRaw(mag_raw);
-		     if (mag_status == HAL_OK) {
+		     if (mag_status == HAL_OK && ak09916_wia2_val_PART2 == 0x09)
+		     {
 		       // 將原始數據轉換為物理單位
 		       ICM20948_ConvertMagRawToUT(mag_raw, mag_uT);
 
-		       printf("Mag(uT): X=%.2f, Y=%.2f, Z=%.2f\r\n",
+		       printf("<ICM20948>Mag(uT): X=%.2f, Y=%.2f, Z=%.2f\r\n",
 		               mag_uT[0], mag_uT[1], mag_uT[2]);
 	//	       printf("%s");
-
+		       printf("The data is OK\r\n");
 		     } else if (mag_status == HAL_BUSY) {
 		       //printf("磁力計數據尚未就緒 (DRDY=0)\r\n");
-		    	 printf("(HAL_BUSY DRDY=0)\r\n");
+		    	 printf("<ICM20948>(HAL_BUSY DRDY=0)\r\n");
 		       // 這是正常情況，因為磁力計更新速率可能較慢或與主迴圈不同步
 		     }
 		     else {
 		    	 //讀取 Mag 數據失敗!
-		       printf("Failed to read Mag !\r\n");
+		       printf("<ICM20948>Failed to read Mag ! Error Code: %d\r\n",status);
 		     }
 
-		     printf("----------------------------------------\r\n");
 		     HAL_Delay(100); // 每秒讀取一次數據
 }
